@@ -9,13 +9,13 @@ const DATABASE_URL = process.env.DATABASE_URL;
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-// PostgreSQL
+// PostgreSQL connection
 const pool = new Pool({
     connectionString: DATABASE_URL,
-    ssl: { rejectUnauthorized: false }
+    ssl: { rejectUnauthorized: false } // ปลอดภัยกับ external DB
 });
 
-// สร้างตาราง users
+// สร้างตาราง users ถ้ายังไม่มี
 pool.query(`
 CREATE TABLE IF NOT EXISTS users (
     user_id TEXT PRIMARY KEY,
@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS users (
 `).then(() => console.log('Users table ready'))
   .catch(console.error);
 
-// คำสั่ง
+// สร้างคำสั่ง slash commands
 const commands = [
     new SlashCommandBuilder()
         .setName('checkin')
@@ -50,6 +50,7 @@ const commands = [
         .toJSON()
 ];
 
+// register commands
 const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 (async () => {
@@ -65,14 +66,14 @@ const rest = new REST({ version: '10' }).setToken(TOKEN);
     }
 })();
 
-// ตรวจสอบวัน
+// ฟังก์ชันตรวจสอบวัน
 function isSameDay(date1, date2) {
     return date1.getFullYear() === date2.getFullYear() &&
            date1.getMonth() === date2.getMonth() &&
            date1.getDate() === date2.getDate();
 }
 
-// ตรวจสอบสิทธิ์ admin
+// ฟังก์ชันตรวจสอบสิทธิ์ admin
 async function isAdmin(interaction) {
     if (!interaction.member.permissions.has('Administrator')) {
         await interaction.reply({ content: 'คุณไม่มีสิทธิ์ใช้คำสั่งนี้', ephemeral: true });
@@ -81,19 +82,19 @@ async function isAdmin(interaction) {
     return true;
 }
 
-// บอทพร้อมใช้งาน
+// ready event
 client.once('ready', () => {
     console.log(`Logged in as ${client.user.tag}`);
 });
 
-// การตอบสนองคำสั่ง
+// interactionCreate event
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
     const userId = interaction.user.id;
     const today = new Date();
 
-    // เช็คอินรายวัน
+    // /checkin
     if (interaction.commandName === 'checkin') {
         try {
             const res = await pool.query('SELECT * FROM users WHERE user_id = $1', [userId]);
@@ -122,7 +123,7 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // ตรวจสอบแต้ม
+    // /points
     else if (interaction.commandName === 'points') {
         const targetUser = interaction.options.getUser('user') || interaction.user;
         try {
@@ -139,7 +140,7 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // เพิ่มแต้ม (Admin)
+    // /addpoints (Admin)
     else if (interaction.commandName === 'addpoints') {
         if (!await isAdmin(interaction)) return;
 
@@ -160,7 +161,7 @@ client.on('interactionCreate', async interaction => {
         }
     }
 
-    // ลดแต้ม (Admin)
+    // /removepoints (Admin)
     else if (interaction.commandName === 'removepoints') {
         if (!await isAdmin(interaction)) return;
 
@@ -186,4 +187,5 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
+// login bot
 client.login(TOKEN);
